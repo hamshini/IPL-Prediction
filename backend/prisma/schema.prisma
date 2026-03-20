@@ -1,0 +1,151 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/////////////////////
+//ENUMS
+/////////////////////
+
+enum Role {
+  ADMIN
+  PLAYER
+}
+
+enum MatchStatus {
+  SCHEDULED
+  STARTED
+  DELAYED
+  CANCELLED
+  COMPLETED
+}
+
+enum PickStatus {
+  PENDING
+  MODIFIED_PENDING
+  APPROVED
+  REJECTED
+}
+
+/////////////////////
+// User
+/////////////////////
+
+model User {
+  id        String       @id @default(uuid())
+  email     String       @unique
+  name      String?
+  role      Role         @default(PLAYER)
+  picks     PlayerPick[]
+  createdAt DateTime     @default(now())
+}
+
+//////////////////////
+// TEAM
+/////////////////////
+
+model Team {
+  id             Int      @id @default(autoincrement())
+  name           String
+  shortName      String   @unique
+  captain        String
+  players        Player[]
+  matchesAsTeamA Match[]  @relation("TeamA")
+  matchesAsTeamB Match[]  @relation("TeamB")
+}
+
+//////////////////////
+// Player
+/////////////////////
+model Player {
+  id             Int      @id @default(autoincrement())
+  name          String
+  teamShortName        String
+  team           Team @relation(fields: [teamShortName], references: [shortName])
+}
+
+/////////////////////////
+// Match
+///////////////////////
+
+model Match {
+  id        String       @id @default(uuid())
+  matchNo Int
+
+  teamAShortName String
+  teamBShortName String
+
+  teamA Team @relation("TeamA", fields: [teamAShortName], references: [shortName])
+  teamB Team @relation("TeamB", fields: [teamBShortName], references: [shortName])
+
+  date           DateTime
+  venue          String
+  scheduledStart DateTime
+  actualStart    DateTime?
+  status         MatchStatus @default(SCHEDULED)
+
+  manOfMatch1 String?
+  manOfMatch2 String?
+
+  picks PlayerPick[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+////////////////////////
+// PLAYER PICK
+///////////////////////
+
+model PlayerPick {
+  id           String @id @default(uuid())
+  userId       String
+  matchId      String
+  teamPickedId String
+
+  mom1Picked String
+  mom2Picked String
+
+  submittedAt    DateTime    @default(now())
+  lastModifiedAt DateTime?
+  status         MatchStatus @default(SCHEDULED)
+
+  score         Int @default(0)
+  previousScore Int @default(0)
+
+  approvalTime DateTime?
+  approvedBy   String?
+
+  history PickHistory[]
+
+  user  User  @relation(fields: [userId], references: [id])
+  match Match @relation(fields: [matchId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, matchId])
+}
+
+///////////////////////
+// PickHistory
+///////////////////////
+
+model PickHistory {
+  id           String     @id @default(uuid())
+  teamPickedId String
+  playerPickId String
+  mom1Picked   String
+  mom2Picked   String
+  modifiedAt   DateTime   @default(now())
+  pick         PlayerPick @relation(fields: [playerPickId], references: [id])
+}
