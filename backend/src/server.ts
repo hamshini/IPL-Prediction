@@ -9,10 +9,12 @@ app.use(express.json());
 
 app.use(cors({
     origin: [
-        "http://localhost:3000",
-        "https://ipl-prediction-frontend.vercel.app/"
-    ]
-}))
+        "http://localhost:3000",                  // local dev
+        "https://ipl-prediction-frontend.vercel.app"  // your deployed frontend
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+}));
 
 app.get("/users", async (req, res) => {
     const users = await prisma.user.findMany();
