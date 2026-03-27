@@ -80,7 +80,7 @@ export default function Home() {
 
       <div className="bg-white p-6 rounded-lg shadow">
         <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold mb-4">
+          <h2 className="text-lg text-black font-semibold mb-4">
             Your Picks Today
           </h2>
           <button
@@ -135,7 +135,7 @@ export default function Home() {
 
       <div className="bg-white p-6 rounded-lg shadow">
         <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold mb-4">
+          <h2 className="text-lg text-black font-semibold mb-4">
             Top 4, Bottom 2, Orange and Purple cap
           </h2>
 

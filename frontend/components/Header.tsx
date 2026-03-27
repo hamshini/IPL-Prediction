@@ -27,7 +27,7 @@ export default function Header() {
         <header className="bg-blue-700 text-white px-6 py-4 flex justify-between items-center">
 
             <h1
-                className="text-xl font-bold text-black cursor-pointer"
+                className="text-xl font-bold  cursor-pointer"
                 onClick={() => router.push("/")}
             >
                 IPL Prediction 2026
