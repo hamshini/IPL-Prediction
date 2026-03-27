@@ -316,7 +316,7 @@ export default function Home() {
                       </button>
                     )}
                     {/* CANCEL */}
-                    {match.status !== "COMPLETED" && match.status !== "CANCELLED" && (
+                    {isAdmin && match.status !== "COMPLETED" && match.status !== "CANCELLED" && (
                       <button
                         onClick={async () => {
                           await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/match/cancel`, {

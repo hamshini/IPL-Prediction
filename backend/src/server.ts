@@ -60,7 +60,12 @@ app.post("/teams", async (req, res) => {
 
 // Matches
 app.get("/matches", async (req, res) => {
-    const matches = await prisma.match.findMany();
+    const matches = await prisma.match.findMany({
+        orderBy: {
+            matchNo: "asc"
+        }
+    });
+
     res.json(matches);
 });
 
@@ -729,52 +734,84 @@ app.get("/matches/:matchId/picks", async (req, res) => {
 app.get("/leaderboard", async (req, res) => {
     try {
         const users = await prisma.user.findMany({
-            select: {
-                id: true,
-                name: true,
-            },
+            select: { id: true, name: true },
         });
 
-        const leaderboard = await Promise.all(
-            users.map(async (user) => {
-                const scores = await prisma.matchScore.findMany({
-                    where: { userId: user.id },
-                    orderBy: { createdAt: "asc" },
-                });
+        const matches = await prisma.match.findMany({
+            where: { status: "COMPLETED" },
+            orderBy: { date: "asc" }
+        });
 
-                if (scores.length === 0) {
-                    return {
-                        name: user.name,
-                        totalPoints: 0,
-                        winPercent: 0,
-                        latestResult: "-",
-                        streak: 0,
-                    };
+        const allScores = await prisma.matchScore.findMany();
+        const allPicks = await prisma.playerPick.findMany();
+
+        const leaderboard = users.map((user) => {
+
+            let totalPoints = 0;
+            let wins = 0;
+            let streak = 0;
+            let lastResult = "-";
+            let lastPoints = 0;
+
+            matches.forEach((match) => {
+
+                const score = allScores.find(
+                    s => s.userId === user.id && s.matchId === match.id
+                );
+
+                const pick = allPicks.find(
+                    p => p.userId === user.id && p.matchId === match.id
+                );
+
+                let matchPoints = 0;
+                let result = "LOSS";
+
+                // ✅ IMPORTANT FIX
+                if (!pick || pick.status !== "APPROVED") {
+                    matchPoints = -10;
+                    result = "LOSS";
+                    streak = 0;
+                } else if (score) {
+                    matchPoints = score.points;
+                    result = score.result;
+
+                    if (result === "WIN") {
+                        wins++;
+                        streak++;
+                    } else {
+                        streak = 0;
+                    }
+                } else {
+                    // fallback safety
+                    matchPoints = -10;
+                    result = "LOSS";
+                    streak = 0;
                 }
 
-                const totalPoints = scores.reduce((sum, s) => sum + s.points, 0);
+                totalPoints += matchPoints;
 
-                const wins = scores.filter((s) => s.result === "WIN").length;
-                const totalMatches = scores.length;
+                // track last match
+                lastResult = result;
+                lastPoints = matchPoints;
+            });
 
-                const winPercent = Math.round((wins / totalMatches) * 100);
+            const totalMatches = matches.length;
+            const winPercent =
+                totalMatches === 0 ? 0 : Math.round((wins / totalMatches) * 100);
 
-                const lastMatch = scores[scores.length - 1]!;
+            return {
+                name: user.name,
+                totalPoints,
+                winPercent,
+                latestResult: `${lastResult} (${lastPoints})`,
+                streak,
+            };
+        });
 
-                return {
-                    name: user.name,
-                    totalPoints,
-                    winPercent,
-                    latestResult: `${lastMatch.result} (${lastMatch.points})`,
-                    streak: lastMatch.streak,
-                };
-            })
-        );
-
-        // ✅ sort
         leaderboard.sort((a, b) => b.totalPoints - a.totalPoints);
 
         res.json(leaderboard);
+
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Leaderboard error" });
@@ -789,48 +826,65 @@ app.get("/match/:matchId/scoreboard", async (req, res) => {
             where: { id: matchId }
         })
 
+        const users = await prisma.user.findMany()
+
         const scores = await prisma.matchScore.findMany({
-            where: { matchId },
-            include: {
-                user: true
-            }
+            where: { matchId }
         })
 
         const picks = await prisma.playerPick.findMany({
-            where: {
-                matchId,
-                status: "APPROVED"
-            }
+            where: { matchId }
         })
 
-        const result = await Promise.all(scores.map(async (score) => {
+        const result = await Promise.all(users.map(async (user) => {
 
-            const pick = picks.find(p => p.userId === score.userId)
+            const score = scores.find(s => s.userId === user.id)
+            const pick = picks.find(p => p.userId === user.id)
 
-            // previous total
+            // ✅ previous total
             const previousScores = await prisma.matchScore.findMany({
                 where: {
-                    userId: score.userId,
-                    createdAt: { lt: score.createdAt }
+                    userId: user.id,
+                    createdAt: { lt: score?.createdAt || new Date() }
                 }
             })
 
             const previousTotal = previousScores.reduce((sum, s) => sum + s.points, 0)
 
+            // ✅ DEFAULT CASE (THIS WAS MISSING)
+            if (!pick || pick.status !== "APPROVED") {
+                return {
+                    userId: user.id,
+                    name: user.name,
+
+                    teamPicked: "-",
+                    mom1: "-",
+                    mom2: "-",
+
+                    result: "LOSS",
+                    isMomCorrect: false,
+                    matchPoints: -10,
+                    previousTotal,
+                    total: previousTotal - 10,
+                    streak: 0,
+                }
+            }
+
+            // ✅ NORMAL CASE
             return {
-                userId: score.userId,
-                name: score.user.name,
+                userId: user.id,
+                name: user.name,
 
-                teamPicked: pick?.teamPickedId,
-                mom1: pick?.mom1Picked,
-                mom2: pick?.mom2Picked,
+                teamPicked: pick.teamPickedId,
+                mom1: pick.mom1Picked,
+                mom2: pick.mom2Picked,
 
-                result: score.result,
-                isMomCorrect: score.isMomCorrect,
-                matchPoints: score.points,
+                result: score?.result || "LOSS",
+                isMomCorrect: score?.isMomCorrect || false,
+                matchPoints: score?.points ?? -10,
                 previousTotal,
-                total: previousTotal + score.points,
-                streak: score.streak,
+                total: previousTotal + (score?.points ?? -10),
+                streak: score?.streak ?? 0,
             }
         }))
 
