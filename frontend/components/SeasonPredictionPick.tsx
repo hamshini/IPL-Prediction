@@ -20,6 +20,36 @@ export default function SeasonPredictionForm({ loggedUser }: { loggedUser: any }
         orangeCaps: [],
         purpleCaps: [],
     })
+    const customStyles = {
+        control: (provided: any) => ({
+            ...provided,
+            color: "#111827",          // text inside the select
+            backgroundColor: "#fff",   // white background
+            borderColor: "#d1d5db",    // Tailwind gray-300
+        }),
+        menu: (provided: any) => ({
+            ...provided,
+            zIndex: 9999,
+        }),
+        option: (provided: any, state: any) => ({
+            ...provided,
+            color: "#111827",           // text color
+            backgroundColor: state.isFocused ? "#e5e7eb" : "#fff", // gray-200 hover
+            fontWeight: 500,
+        }),
+        singleValue: (provided: any) => ({
+            ...provided,
+            color: "#111827",
+        }),
+        multiValueLabel: (provided: any) => ({
+            ...provided,
+            color: "#111827",
+        }),
+        placeholder: (provided: any) => ({
+            ...provided,
+            color: "#6b7280", // gray placeholder
+        }),
+    };
 
     useEffect(() => {
         getUser().then(setUsers)

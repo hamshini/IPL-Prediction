@@ -1,5 +1,7 @@
 "use client"
+import MySelect from "@/components/styles/Myselect"
 import { getUpcomingMatches, getAllMatchPicks, getSeasonPrediction, getTeams, getPlayersByTeams, getLeaderboard } from "@/lib/api"
+import { customSelectStyles } from "@/lib/reactSelectStyles"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
@@ -199,7 +201,7 @@ export default function Home() {
 
         <div className="flex justify-between items-center mb-4">
 
-          <h2 className="text-lg font-semibold">
+          <h2 className="text-lg text-black font-semibold">
             Upcoming Matches
           </h2>
 
@@ -232,7 +234,7 @@ export default function Home() {
                     Match {match.matchNo}
                   </p>
 
-                  <p className="font-medium">
+                  <p className="font-medium text-black">
                     {match.teamAShortName} vs {match.teamBShortName}
                   </p>
 
@@ -248,7 +250,7 @@ export default function Home() {
                 {/* RIGHT */}
                 <div className="text-right">
 
-                  <p className="font-medium">{match.venue}</p>
+                  <p className="font-medium text-black">{match.venue}</p>
 
                   <p className="text-sm text-gray-500">
                     {new Date(match.date).toLocaleDateString("en-IN", {
@@ -372,8 +374,8 @@ export default function Home() {
             </h2>
 
             {/* Winning Team */}
-            <select
-              onChange={(e) =>
+            <MySelect
+              onChange={(e: any) =>
                 setSelectedMatch((prev: any) => ({
                   ...prev,
                   winningTeamId: e.target.value,
@@ -388,11 +390,11 @@ export default function Home() {
               <option value={selectedMatch.teamBShortName}>
                 {selectedMatch.teamBShortName}
               </option>
-            </select>
+            </MySelect>
 
             {/* MoM */}
-            <select
-              onChange={(e) =>
+            <MySelect
+              onChange={(e: any) =>
                 setSelectedMatch((prev: any) => ({
                   ...prev,
                   manOfMatch: e.target.value,
@@ -406,7 +408,7 @@ export default function Home() {
                   {p.name}
                 </option>
               ))}
-            </select>
+            </MySelect>
 
             {/* Buttons */}
             <div className="flex justify-end gap-2">
