@@ -40,7 +40,7 @@ export default function AdminPicksPage() {
 
     return (
         <div className="p-6">
-            <h1 className="text-xl font-bold mb-4">Match Picks</h1>
+            <h1 className="text-xl font-bold text-black mb-4">Match Picks</h1>
 
             {/* 🔍 FILTER */}
             {/* <input

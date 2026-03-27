@@ -30,7 +30,7 @@ export default function MatchPicksPage() {
 
     return (
         <div className="p-6">
-            <h1 className="text-xl font-semibold mb-4">
+            <h1 className="text-xl text-black font-semibold mb-4">
                 Match Picks
             </h1>
 

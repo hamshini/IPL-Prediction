@@ -12,7 +12,7 @@ export default function LeaderboardPage() {
 
     return (
         <div className="bg-white p-6 rounded shadow">
-            <h1 className="text-xl font-bold mb-4">Leaderboard</h1>
+            <h1 className="text-xl font-bold text-black mb-4">Leaderboard</h1>
 
             <table className="w-full text-left">
                 <thead>
