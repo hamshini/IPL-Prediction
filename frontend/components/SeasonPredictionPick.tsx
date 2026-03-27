@@ -108,14 +108,14 @@ export default function SeasonPredictionForm({ loggedUser }: { loggedUser: any }
         <form onSubmit={handleSubmit} className="space-y-6">
 
             {/* USER */}
-            <MySelect
+            <select
                 value={formData.userId}
-                onChange={(e: any) => setFormData({ ...formData, userId: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
             >
                 {users.map(u => (
                     <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
-            </MySelect>
+            </select>
 
             {/* TOP 4 */}
             <div>
