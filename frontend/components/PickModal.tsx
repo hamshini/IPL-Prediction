@@ -1,73 +1,41 @@
 "use client"
 
-import { getMatch, getUser, getPlayersByTeams } from "@/lib/api";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react"
-import { useForm } from "react-hook-form"
+import { useEffect, useState, useMemo } from "react"
+import { getMatch, getPlayersByTeams, getUser, submitPicks } from "@/lib/api"
+import { useRouter } from "next/navigation"
 
 export default function PickForm({ loggedUser }: { loggedUser: any }) {
-    type Match = {
-        id: number
-        matchNo: number
-        date: string
-        teamAShortName: string
-        teamBShortName: string
-    }
-    const { register, handleSubmit } = useForm()
     const router = useRouter()
-    const [users, setUsers] = useState([])
-    const [matches, setMatches] = useState<Match[]>([])
+    const [users, setUsers] = useState<any[]>([]) // all users
+    const [matches, setMatches] = useState<any[]>([])
     const [playersByMatch, setPlayersByMatch] = useState<Record<number, any[]>>({})
-    const getRelevantMatches = () => {
-        if (!matches.length) return []
+    const [formData, setFormData] = useState<any>({
+        user: loggedUser.name,
+    })
 
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-
-
-        // Normalize match dates
-        const sortedMatches = [...matches].sort(
-            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-        )
-
-        // Group matches by date (YYYY-MM-DD)
-        const grouped: Record<string, any[]> = {}
-
-        sortedMatches.forEach(match => {
-            const dateKey = new Date(match.date).toISOString().split("T")[0]
-            if (!grouped[dateKey]) grouped[dateKey] = []
-            grouped[dateKey].push(match)
-        })
-
-        const dates = Object.keys(grouped).sort()
-
-        // Step 1: Check for today's matches
-        const todayKey = today.toISOString().split("T")[0]
-        if (grouped[todayKey]) {
-            return grouped[todayKey]
+    // Redirect if no token
+    useEffect(() => {
+        const token = localStorage.getItem("token")
+        if (!token) {
+            router.push("/login")
         }
+    }, [])
 
-        // Step 2: Find next future match date
-        for (let date of dates) {
-            if (new Date(date) > today) {
-                return grouped[date]
-            }
-        }
-
-        return []
-    }
-
+    // Load users
     useEffect(() => {
         getUser().then(setUsers)
+    }, [])
+
+    // Load matches
+    useEffect(() => {
         getMatch().then(setMatches)
     }, [])
+
+    // Load players for relevant matches
     useEffect(() => {
-        if (!matches.length) return
-
-        const relevantMatches = getRelevantMatches()
-
-        relevantMatches.forEach(async (match: any) => {
+        relevantMatches.forEach(async (match) => {
             if (playersByMatch[match.id]) return
+
             const players = await getPlayersByTeams([
                 match.teamAShortName,
                 match.teamBShortName,
@@ -78,127 +46,158 @@ export default function PickForm({ loggedUser }: { loggedUser: any }) {
                 [match.id]: players,
             }))
         })
+    }, [matches, users]) // include users so that relevantMatches triggers correctly if needed
+
+    // Optimized relevant matches
+    const relevantMatches = useMemo(() => {
+        if (!matches.length) return []
+
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+
+        const sorted = [...matches].sort(
+            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+        )
+
+        const grouped: Record<string, any[]> = {}
+        sorted.forEach((match) => {
+            const key = new Date(match.date).toISOString().split("T")[0]
+            if (!grouped[key]) grouped[key] = []
+            grouped[key].push(match)
+        })
+
+        const todayKey = today.toISOString().split("T")[0]
+
+        if (grouped[todayKey]) return grouped[todayKey]
+
+        const futureDates = Object.keys(grouped)
+            .filter((date) => new Date(date) > today)
+            .sort()
+
+        if (futureDates.length > 0) return grouped[futureDates[0]]
+
+        return []
     }, [matches])
 
-    const onSubmit = (data: any) => {
-        console.log(data)
-        router.back()
+    // Handle form changes
+    const handleChange = (key: string, value: string) => {
+        setFormData((prev: any) => ({
+            ...prev,
+            [key]: value,
+        }))
     }
+
+    // Handle submit
+    const handleSubmit = async (e: any) => {
+        e.preventDefault()
+
+        try {
+            const result = await submitPicks(formData)
+            console.log(result)
+
+            alert("Picks submitted successfully!")
+            router.back()
+        } catch (err: any) {
+            alert(err.message)
+        }
+    }
+
     return (
+        <form onSubmit={handleSubmit} className="space-y-6">
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-
+            {/* Logged in user */}
             <div>
-                <p className="text-sm text-gray-500">
-                    Logged in user
-                </p>
-
-                <p className="font-medium">
-                    {loggedUser.email}
-                </p>
+                <p className="text-sm text-gray-500">Logged in user</p>
+                <p className="font-medium">{loggedUser.email}</p>
             </div>
 
+            {/* Username dropdown */}
             <div>
-                <label>User</label>
-
+                <label className="block mb-1">Select User</label>
                 <select
-                    {...register("username")}
+                    value={formData.user}
+                    onChange={(e) => handleChange("user", e.target.value)}
                     className="border p-2 rounded w-full"
-                    defaultValue={loggedUser.name}
                 >
-
-                    {users.map((user: any) => (
+                    {users.map((user) => (
                         <option key={user.id} value={user.name}>
                             {user.name}
                         </option>
                     ))}
-
                 </select>
             </div>
 
-            {getRelevantMatches().map((match: any) => (
-
+            {/* Matches */}
+            {relevantMatches.map((match) => (
                 <div key={match.id} className="border p-4 rounded space-y-3">
 
-                    <p className="font-semibold">
-                        Match {match.matchNo}
-                    </p>
-
+                    <p className="font-semibold">Match {match.matchNo}</p>
                     <p className="text-sm text-gray-500">
                         {new Date(match.date).toLocaleDateString()}
                     </p>
 
+                    {/* Teams */}
                     <div>
-
-                        <label className="block">Choose Team</label>
-
                         <label className="mr-4">
-
                             <input
                                 type="radio"
+                                name={`team_${match.id}`}
                                 value={match.teamAShortName}
-                                {...register(`team_${match.id}`, { required: true })}
+                                checked={formData[`team_${match.id}`] === match.teamAShortName}
+                                onChange={(e) =>
+                                    handleChange(`team_${match.id}`, e.target.value)
+                                }
                             />
-
                             {match.teamAShortName}
-
                         </label>
 
                         <label>
-
                             <input
                                 type="radio"
+                                name={`team_${match.id}`}
                                 value={match.teamBShortName}
-                                {...register(`team_${match.id}`)}
+                                checked={formData[`team_${match.id}`] === match.teamBShortName}
+                                onChange={(e) =>
+                                    handleChange(`team_${match.id}`, e.target.value)
+                                }
                             />
-
                             {match.teamBShortName}
-
                         </label>
-
                     </div>
 
-
                     {/* MOM1 */}
-
                     <select
-                        {...register(`mom1_${match.id}`)}
+                        value={formData[`mom1_${match.id}`] || ""}
+                        onChange={(e) => handleChange(`mom1_${match.id}`, e.target.value)}
                         className="border p-2 rounded w-full"
                     >
-
+                        <option value="">Select MOM 1</option>
                         {(playersByMatch[match.id] || []).map((player: any) => (
                             <option key={player.id} value={player.name}>
                                 {player.name}
                             </option>
                         ))}
-
                     </select>
 
+                    {/* MOM2 */}
                     <select
-                        {...register(`mom2_${match.id}`)}
+                        value={formData[`mom2_${match.id}`] || ""}
+                        onChange={(e) => handleChange(`mom2_${match.id}`, e.target.value)}
                         className="border p-2 rounded w-full"
                     >
-
+                        <option value="">Select MOM 2</option>
                         {(playersByMatch[match.id] || []).map((player: any) => (
-                            <option key={player.id}>
+                            <option key={player.id} value={player.name}>
                                 {player.name}
                             </option>
                         ))}
-
                     </select>
-
                 </div>
-
             ))}
 
-
-            <button
-                className="bg-blue-600 text-white px-4 py-2 rounded"
-            >
+            <button className="bg-blue-600 text-white px-4 py-2 rounded">
                 Submit Picks
             </button>
-
         </form>
-
     )
 }

@@ -1,9 +1,9 @@
 "use client"
 
-import PickForm from "@/components/PickModal"
+import SeasonPredictionForm from "@/components/SeasonPredictionPick"
 import { useEffect, useState } from "react"
 
-export default function PicksPage() {
+export default function SeasonPicksPage() {
     const [user, setUser] = useState<any>(null)
 
     useEffect(() => {
@@ -18,9 +18,8 @@ export default function PicksPage() {
     }
     return (
         <div className="p-6">
-            <PickForm
+            <SeasonPredictionForm
                 loggedUser={user}
-            // onClose={() => window.history.back()}
             />
         </div>
     )

@@ -1,7 +1,11 @@
 import express from "express";
 import { prisma } from "./lib/prisma";
 import cors from "cors"
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import dotenv from "dotenv";
 
+dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 4000;
 
@@ -21,13 +25,13 @@ app.get("/users", async (req, res) => {
     res.json(users);
 });
 
-app.post("/users", async (req, res) => {
-    const { email, name, role } = req.body;
-    const user = await prisma.user.create({
-        data: { email, name, role },
-    });
-    res.json(user);
-});
+// app.post("/users", async (req, res) => {
+//     const { email, name, role, password } = req.body;
+//     const user = await prisma.user.create({
+//         data: { email, name, role, password },
+//     });
+//     res.json(user);
+// });
 
 // Get Teams
 app.get("/teams", async (req, res) => {
@@ -44,6 +48,8 @@ app.get("/teams/shortname/:shortName", async (req, res) => {
 
     res.json(team);
 });
+
+//create team
 app.post("/teams", async (req, res) => {
     const { name, shortName, captain } = req.body;
     const team = await prisma.team.create({
@@ -95,9 +101,10 @@ app.get("/matches/upcoming", async (req, res) => {
                 gte: new Date(),
             },
         },
-        orderBy: {
-            date: "asc",
-        },
+        orderBy: [
+            { date: "asc" },
+            { matchNo: "asc" } // ✅ stable ordering
+        ],
         take: 3,
     })
 
@@ -129,6 +136,716 @@ app.post("/players/by-teams", async (req, res) => {
     }
 });
 
+app.post("/signup", async (req, res) => {
+    const { email, name, password } = req.body;
+
+    // Check if email or name already exists
+    const existingUser = await prisma.user.findFirst({
+        where: { OR: [{ email }, { name }] }
+    });
+
+    if (existingUser) {
+        return res.status(400).json({ error: "Email or username already exists" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.create({
+        data: { email, name, password: hashedPassword }
+    });
+
+    res.json({ message: "User created", userId: user.id });
+});
+
+app.post("/login", async (req, res) => {
+    const { login, password } = req.body; // login = email or name
+
+    const user = await prisma.user.findFirst({
+        where: { OR: [{ email: login }, { name: login }] }
+    });
+
+    if (!user) {
+        return res.status(400).json({ error: "User not found" });
+    }
+
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+        return res.status(400).json({ error: "Invalid password" });
+    }
+
+    // generate JWT
+    const token = jwt.sign(
+        { userId: user.id, email: user.email },
+        process.env.JWT_SECRET!,
+        { expiresIn: "7d" }
+    );
+
+    res.json({ message: "Login successful", token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+});
+
+// Player Picks
+app.post("/picks", async (req, res) => {
+    try {
+        // 1️⃣ Get token
+        const authHeader = req.headers.authorization
+        if (!authHeader) return res.status(401).json({ error: "Unauthorized" })
+
+        const token = authHeader.split(" ")[1]
+        if (!token) return res.status(401).json({ error: "Unauthorized" })
+
+        // 2️⃣ Verify JWT
+        let payload: any
+        try {
+            payload = jwt.verify(token, process.env.JWT_SECRET!)
+        } catch (err) {
+            return res.status(401).json({ error: "Invalid token" })
+        }
+
+        const submittedBy = payload.userId // 👈 logged-in user
+
+        // 3️⃣ Get data
+        const data = req.body
+
+        // 4️⃣ Find selected user (from dropdown)
+        const selectedUser = await prisma.user.findFirst({
+            where: { name: data.user }
+        })
+
+        if (!selectedUser) {
+            return res.status(400).json({ error: "Selected user not found" })
+        }
+
+        const userId = selectedUser.id // 👈 whose picks these are
+
+        // 5️⃣ Process picks
+        const pickPromises = Object.keys(data)
+            .filter((key) => key.startsWith("team_"))
+            .map(async (teamKey) => {
+                const matchId = teamKey.split("_")[1]
+                if (!matchId) return
+
+                const teamPickedId = data[teamKey]
+                const mom1Picked = data[`mom1_${matchId}`] || null
+                const mom2Picked = data[`mom2_${matchId}`] || null
+
+                // ✅ ONLY CREATE HISTORY
+                await prisma.pickHistory.create({
+                    data: {
+                        playerPickId: null,
+                        userId,
+                        matchId,
+                        submittedBy,
+                        teamPickedId,
+                        mom1Picked,
+                        mom2Picked,
+                        status: "PENDING",
+                    },
+                })
+            })
+
+        await Promise.all(pickPromises)
+
+        res.json({ message: "Picks submitted successfully" })
+
+    } catch (err) {
+        console.error(err)
+        res.status(500).json({ error: "Failed to submit picks" })
+    }
+})
+
+app.post("/season-prediction", async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader) return res.status(401).json({ error: "Unauthorized" });
+
+        const token = authHeader.split(" ")[1];
+        if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+        let payload: any;
+        try {
+            payload = jwt.verify(token, process.env.JWT_SECRET!);
+        } catch (err) {
+            return res.status(401).json({ error: "Invalid token" });
+        }
+
+        const submittedBy = payload.userId;
+
+        const {
+            userId,
+            top1TeamId,
+            top2TeamId,
+            top3TeamId,
+            top4TeamId,
+            bottom1TeamId,
+            bottom2TeamId,
+            orangeCap1,
+            orangeCap2,
+            orangeCap3,
+            purpleCap1,
+            purpleCap2,
+            purpleCap3,
+        } = req.body;
+
+        if (!userId) return res.status(400).json({ error: "userId is required" });
+
+        // Upsert main prediction
+        const prediction = await prisma.seasonPrediction.upsert({
+            where: { userId },
+            create: {
+                userId,
+                submittedBy,
+                top1TeamId,
+                top2TeamId,
+                top3TeamId,
+                top4TeamId,
+                bottom1TeamId,
+                bottom2TeamId,
+                orangeCap1,
+                orangeCap2,
+                orangeCap3,
+                purpleCap1,
+                purpleCap2,
+                purpleCap3,
+                submittedAt: new Date(),
+            },
+            update: {
+                submittedBy,
+                top1TeamId,
+                top2TeamId,
+                top3TeamId,
+                top4TeamId,
+                bottom1TeamId,
+                bottom2TeamId,
+                orangeCap1,
+                orangeCap2,
+                orangeCap3,
+                purpleCap1,
+                purpleCap2,
+                purpleCap3,
+                lastModifiedAt: new Date(),
+            },
+        });
+
+        // Add history
+        await prisma.seasonPredictionHistory.create({
+            data: {
+                seasonPredictionId: prediction.id,
+                top1TeamId,
+                top2TeamId,
+                top3TeamId,
+                top4TeamId,
+                bottom1TeamId,
+                bottom2TeamId,
+                orangeCap1,
+                orangeCap2,
+                orangeCap3,
+                purpleCap1,
+                purpleCap2,
+                purpleCap3,
+                modifiedBy: submittedBy,
+            },
+        });
+
+        res.json({ message: "Season prediction submitted successfully", prediction });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Something went wrong" });
+    }
+});
+
+app.get("/getTopBottomPrediction", async (req, res) => {
+    const seasonPrediction_details = await prisma.seasonPrediction.findMany();
+    console.log(seasonPrediction_details);
+
+    res.json(seasonPrediction_details);
+});
+
+app.get("/getMatchPicks", async (req, res) => {
+    const getMatchPick_details = await prisma.playerPick.findMany();
+    console.log(getMatchPick_details);
+
+    res.json(getMatchPick_details);
+});
+
+app.post("/admin/match/start", async (req, res) => {
+    try {
+        const { matchId } = req.body
+
+        const updated = await prisma.match.update({
+            where: { id: matchId },
+            data: {
+                status: "STARTED",
+                actualStart: new Date(), // ✅ always now
+            },
+        })
+
+        res.json(updated)
+    } catch (err) {
+        res.status(500).json({ error: "Error starting match" })
+    }
+})
+
+app.post("/admin/match/delay", async (req, res) => {
+    try {
+        const { matchId, actualStart } = req.body
+
+        if (!actualStart) {
+            return res.status(400).json({
+                error: "Start time required when delaying match",
+            })
+        }
+
+        const updated = await prisma.match.update({
+            where: { id: matchId },
+            data: {
+                status: "DELAYED",
+                actualStart: new Date(actualStart),
+            },
+        })
+
+        res.json(updated)
+    } catch (err) {
+        res.status(500).json({ error: "Error delaying match" })
+    }
+
+})
+
+app.get("/admin/match/:matchId/picks", async (req, res) => {
+    try {
+        const { matchId } = req.params
+
+        const match = await prisma.match.findUnique({
+            where: { id: matchId },
+        })
+
+        // ❗ BLOCK if no start time
+        if (!match?.actualStart) {
+            return res.status(403).json({
+                error: "Match not started yet",
+            })
+        }
+        const picks = await prisma.pickHistory.findMany({
+            where: {
+                matchId, // ✅ direct filter
+            },
+            include: {
+                user: true, // ✅ get user directly
+            },
+            orderBy: [
+                { user: { name: "asc" } },
+                { modifiedAt: "asc" },
+            ],
+        })
+
+        res.json(picks)
+    } catch (err) {
+        console.error(err)
+        res.status(500).json({ error: "Error fetching picks" })
+    }
+})
+
+app.post("/match/complete", async (req, res) => {
+    try {
+        const { matchId, winningTeamId, manOfMatch } = req.body;
+
+        if (!matchId || !winningTeamId || !manOfMatch) {
+            return res.status(400).json({ error: "All fields required" });
+        }
+        const match = await prisma.match.findUnique({
+            where: { id: matchId }
+        });
+
+        if (match?.status !== "STARTED") {
+            return res.status(400).json({ error: "Match not started" });
+        }
+        // ✅ prevent duplicate scoring
+        const existing = await prisma.matchScore.findFirst({
+            where: { matchId }
+        });
+
+        // if (existing) {
+        //     return res.status(400).json({ error: "Already scored" });
+        // }
+
+        // 1️⃣ Update match
+        await prisma.match.update({
+            where: { id: matchId },
+            data: {
+                status: "COMPLETED",
+                winningTeamId,
+                manOfMatch
+            }
+        });
+
+        // 2️⃣ Get approved picks
+        const picks = await prisma.playerPick.findMany({
+            where: {
+                matchId,
+                status: "APPROVED"
+            }
+        });
+
+        // 3️⃣ Loop
+        for (const pick of picks) {
+
+            const isWin = pick.teamPickedId === winningTeamId;
+
+            const isMom =
+                pick.mom1Picked === manOfMatch ||
+                pick.mom2Picked === manOfMatch;
+
+            // 🔁 streak
+            const last = await prisma.matchScore.findFirst({
+                where: { userId: pick.userId },
+                orderBy: { createdAt: "desc" }
+            });
+
+            let streak = 0;
+            if (last?.result === "WIN") {
+                streak = last.streak;
+            }
+
+            let points = 0;
+
+            if (isWin) {
+                streak += 1;
+
+                points = Math.min(streak * 10, 30); // 10 for 1st win, 20 for 2nd, max 30
+
+            } else {
+                points = -10;
+                streak = 0;
+            }
+
+            // ✅ MoM rule (either matches)
+            if (isMom) {
+                points += 5;
+            }
+
+            await prisma.matchScore.create({
+                data: {
+                    userId: pick.userId,
+                    matchId,
+                    result: isWin ? "WIN" : "LOSS",
+                    streak,
+                    points,
+                    isMomCorrect: isMom
+                }
+            });
+        }
+
+        res.json({ message: "Match completed + scoring done" });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Error completing match" });
+    }
+});
+
+app.post("/admin/match/cancel", async (req, res) => {
+    try {
+        const { matchId } = req.body
+
+        const updated = await prisma.match.update({
+            where: { id: matchId },
+            data: {
+                status: "CANCELLED",
+            },
+        })
+
+        res.json(updated)
+    } catch (err) {
+        res.status(500).json({ error: "Error cancelling match" })
+    }
+})
+
+app.post("/admin/pick/approve", async (req, res) => {
+    try {
+        const { historyId, adminId } = req.body
+
+        const history = await prisma.pickHistory.findUnique({
+            where: { id: historyId },
+        })
+
+        if (!history) {
+            return res.status(404).json({ error: "History not found" })
+        }
+
+        // 🚫 RULE: Only one approved pick per user per match
+        const existingApproved = await prisma.playerPick.findFirst({
+            where: {
+                userId: history.userId,
+                matchId: history.matchId,
+                status: "APPROVED",
+            },
+        })
+
+        if (existingApproved) {
+            return res.status(400).json({
+                error: "An approved pick already exists. Reject it first.",
+            })
+        }
+
+        // 🔍 Check if PlayerPick already exists (any status)
+        let pick = await prisma.playerPick.findUnique({
+            where: {
+                userId_matchId: {
+                    userId: history.userId,
+                    matchId: history.matchId,
+                },
+            },
+        })
+
+        if (pick) {
+            // ✅ Update existing
+            pick = await prisma.playerPick.update({
+                where: { id: pick.id },
+                data: {
+                    status: "APPROVED",
+                    approvalTime: new Date(),
+                    approvedBy: adminId,
+                    teamPickedId: history.teamPickedId,
+                    mom1Picked: history.mom1Picked,
+                    mom2Picked: history.mom2Picked,
+                },
+            })
+        } else {
+            // ✅ Create new
+            pick = await prisma.playerPick.create({
+                data: {
+                    userId: history.userId,
+                    submittedBy: history.submittedBy,
+                    matchId: history.matchId,
+                    teamPickedId: history.teamPickedId,
+                    mom1Picked: history.mom1Picked,
+                    mom2Picked: history.mom2Picked,
+                    status: "APPROVED",
+                    approvalTime: new Date(),
+                    approvedBy: adminId,
+                },
+            })
+        }
+
+        // 🔗 Link history
+        await prisma.pickHistory.update({
+            where: { id: historyId },
+            data: {
+                playerPickId: pick.id,
+                status: "APPROVED",
+            },
+        })
+
+        res.json(pick)
+
+    } catch (err) {
+        console.error(err)
+        res.status(500).json({ error: "Error approving pick" })
+    }
+})
+
+app.post("/admin/pick/reject", async (req, res) => {
+    try {
+        const { historyId } = req.body
+
+        const history = await prisma.pickHistory.findUnique({
+            where: { id: historyId },
+        })
+
+        if (!history) {
+            return res.status(404).json({ error: "History not found" })
+        }
+
+        // ✅ CASE 1: PlayerPick exists → update it
+        if (history.playerPickId) {
+            const updatedPick = await prisma.playerPick.update({
+                where: { id: history.playerPickId },
+                data: {
+                    status: "REJECTED",
+                },
+            })
+
+            // also update history for UI
+            await prisma.pickHistory.update({
+                where: { id: historyId },
+                data: { status: "REJECTED" },
+            })
+
+            return res.json(updatedPick)
+        }
+
+        // ✅ CASE 2: No PlayerPick yet → just update history
+        const updatedHistory = await prisma.pickHistory.update({
+            where: { id: historyId },
+            data: {
+                status: "REJECTED",
+            },
+        })
+
+        res.json(updatedHistory)
+
+    } catch (err) {
+        console.error(err)
+        res.status(500).json({ error: "Error rejecting pick" })
+    }
+})
+
+app.get("/matches/:matchId/picks", async (req, res) => {
+    try {
+        const { matchId } = req.params
+        const match = await prisma.match.findUnique({
+            where: { id: matchId },
+        })
+        if (!match?.actualStart) {
+            return res.status(403).json({
+                error: "Picks will be visible after match starts",
+            })
+        }
+        const picks = await prisma.playerPick.findMany({
+            where: {
+                matchId,
+                status: "APPROVED", // ✅ only approved
+            },
+            include: {
+                user: {
+                    select: {
+                        name: true,
+                    },
+                },
+            },
+            orderBy: {
+                user: {
+                    name: "asc",
+                },
+            },
+        })
+
+        res.json(picks)
+    } catch (err) {
+        console.error(err)
+        res.status(500).json({ error: "Error fetching approved picks" })
+    }
+})
+
+app.get("/leaderboard", async (req, res) => {
+    try {
+        const users = await prisma.user.findMany({
+            select: {
+                id: true,
+                name: true,
+            },
+        });
+
+        const leaderboard = await Promise.all(
+            users.map(async (user) => {
+                const scores = await prisma.matchScore.findMany({
+                    where: { userId: user.id },
+                    orderBy: { createdAt: "asc" },
+                });
+
+                if (scores.length === 0) {
+                    return {
+                        name: user.name,
+                        totalPoints: 0,
+                        winPercent: 0,
+                        latestResult: "-",
+                        streak: 0,
+                    };
+                }
+
+                const totalPoints = scores.reduce((sum, s) => sum + s.points, 0);
+
+                const wins = scores.filter((s) => s.result === "WIN").length;
+                const totalMatches = scores.length;
+
+                const winPercent = Math.round((wins / totalMatches) * 100);
+
+                const lastMatch = scores[scores.length - 1]!;
+
+                return {
+                    name: user.name,
+                    totalPoints,
+                    winPercent,
+                    latestResult: `${lastMatch.result} (${lastMatch.points})`,
+                    streak: lastMatch.streak,
+                };
+            })
+        );
+
+        // ✅ sort
+        leaderboard.sort((a, b) => b.totalPoints - a.totalPoints);
+
+        res.json(leaderboard);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Leaderboard error" });
+    }
+});
+
+app.get("/match/:matchId/scoreboard", async (req, res) => {
+    try {
+        const { matchId } = req.params
+
+        const match = await prisma.match.findUnique({
+            where: { id: matchId }
+        })
+
+        const scores = await prisma.matchScore.findMany({
+            where: { matchId },
+            include: {
+                user: true
+            }
+        })
+
+        const picks = await prisma.playerPick.findMany({
+            where: {
+                matchId,
+                status: "APPROVED"
+            }
+        })
+
+        const result = await Promise.all(scores.map(async (score) => {
+
+            const pick = picks.find(p => p.userId === score.userId)
+
+            // previous total
+            const previousScores = await prisma.matchScore.findMany({
+                where: {
+                    userId: score.userId,
+                    createdAt: { lt: score.createdAt }
+                }
+            })
+
+            const previousTotal = previousScores.reduce((sum, s) => sum + s.points, 0)
+
+            return {
+                userId: score.userId,
+                name: score.user.name,
+
+                teamPicked: pick?.teamPickedId,
+                mom1: pick?.mom1Picked,
+                mom2: pick?.mom2Picked,
+
+                result: score.result,
+                isMomCorrect: score.isMomCorrect,
+                matchPoints: score.points,
+                previousTotal,
+                total: previousTotal + score.points,
+                streak: score.streak,
+            }
+        }))
+
+        res.json({
+            match,
+            scoreboard: result
+        })
+
+    } catch (err) {
+        console.error(err)
+        res.status(500).json({ error: "Error fetching scoreboard" })
+    }
+})
+
 app.listen(PORT, () => {
     console.log(`Backend running on port ${PORT}`);
 });
+

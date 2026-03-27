@@ -1,10 +1,11 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
 export default function MatchesPage() {
     const [matches, setMatches] = useState<any[]>([])
-
+    const router = useRouter()
     useEffect(() => {
         fetch(`${process.env.NEXT_PUBLIC_API_URL}/matches`)
             .then(res => res.json())
@@ -57,7 +58,12 @@ export default function MatchesPage() {
                                 minute: "2-digit"
                             })}
                         </p>
-
+                        <button
+                            onClick={() => router.push(`/match/${match.id}/scoreboard`)}
+                            className="text-green-600 text-xs"
+                        >
+                            Picks & Score
+                        </button>
                     </div>
 
                 ))}
@@ -78,6 +84,8 @@ export default function MatchesPage() {
                             <th className="p-3">Teams</th>
                             <th className="p-3">Venue</th>
                             <th className="p-3">Date</th>
+                            <th className="p-3">status</th>
+                            <th className="p-3">Picks & Score</th>
 
                         </tr>
 
@@ -108,7 +116,16 @@ export default function MatchesPage() {
                                     })}
 
                                 </td>
+                                <td className="p-3">{match.status}</td>
+                                <td className="p-3">
 
+                                    <button
+                                        onClick={() => router.push(`/match/${match.id}/scoreboard`)}
+                                        className="text-green-600 text-xs"
+                                    >
+                                        Picks & Score
+                                    </button>
+                                </td>
                             </tr>
 
                         ))}
