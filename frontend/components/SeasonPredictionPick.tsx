@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { getUser, getTeams, getPlayersDetails, submitSeasonPicks } from "@/lib/api"
 import { useRouter } from "next/navigation"
-import Select from "react-select"
-
+import MySelect from "@/components/styles/Myselect"
 export default function SeasonPredictionForm({ loggedUser }: { loggedUser: any }) {
 
     const [users, setUsers] = useState<any[]>([])
@@ -20,36 +19,6 @@ export default function SeasonPredictionForm({ loggedUser }: { loggedUser: any }
         orangeCaps: [],
         purpleCaps: [],
     })
-    const customStyles = {
-        control: (provided: any) => ({
-            ...provided,
-            color: "#111827",          // text inside the select
-            backgroundColor: "#fff",   // white background
-            borderColor: "#d1d5db",    // Tailwind gray-300
-        }),
-        menu: (provided: any) => ({
-            ...provided,
-            zIndex: 9999,
-        }),
-        option: (provided: any, state: any) => ({
-            ...provided,
-            color: "#111827",           // text color
-            backgroundColor: state.isFocused ? "#e5e7eb" : "#fff", // gray-200 hover
-            fontWeight: 500,
-        }),
-        singleValue: (provided: any) => ({
-            ...provided,
-            color: "#111827",
-        }),
-        multiValueLabel: (provided: any) => ({
-            ...provided,
-            color: "#111827",
-        }),
-        placeholder: (provided: any) => ({
-            ...provided,
-            color: "#6b7280", // gray placeholder
-        }),
-    };
 
     useEffect(() => {
         getUser().then(setUsers)
@@ -139,14 +108,14 @@ export default function SeasonPredictionForm({ loggedUser }: { loggedUser: any }
         <form onSubmit={handleSubmit} className="space-y-6">
 
             {/* USER */}
-            <select
+            <MySelect
                 value={formData.userId}
-                onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
+                onChange={(e: any) => setFormData({ ...formData, userId: e.target.value })}
             >
                 {users.map(u => (
                     <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
-            </select>
+            </MySelect>
 
             {/* TOP 4 */}
             <div>
@@ -204,7 +173,7 @@ export default function SeasonPredictionForm({ loggedUser }: { loggedUser: any }
             <div>
                 <h3>Orange Cap (3)</h3>
 
-                <Select
+                <MySelect
                     options={playerOptions}
                     isMulti
                     value={playerOptions.filter(p =>
@@ -224,7 +193,7 @@ export default function SeasonPredictionForm({ loggedUser }: { loggedUser: any }
             <div>
                 <h3>Purple Cap (3)</h3>
 
-                <Select
+                <MySelect
                     options={playerOptions}
                     isMulti
                     value={playerOptions.filter(p =>
