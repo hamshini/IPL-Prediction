@@ -45,7 +45,7 @@ export default function SeasonPredictionPage() {
     return (
         <div className="space-y-6">
 
-            <h1 className="text-xl font-bold">Season Predictions</h1>
+            <h1 className="text-xl text-black font-bold">Season Predictions</h1>
 
             {/* MOBILE */}
             <div className="space-y-4 md:hidden">
@@ -119,7 +119,7 @@ export default function SeasonPredictionPage() {
 
                 <table className="w-full text-left text-sm">
 
-                    <thead className="border-b text-gray-500">
+                    <thead className="border-b text-black">
                         <tr>
                             <th className="p-3">User</th>
                             <th className="p-3">Top 4</th>
@@ -131,7 +131,7 @@ export default function SeasonPredictionPage() {
 
                     <tbody>
                         {predictions.map((p) => (
-                            <tr key={p.id} className="border-b">
+                            <tr key={p.id} className="border-b text-black">
 
                                 <td className="p-3">
                                     {userMap[p.userId] || p.userId.slice(0, 6)}

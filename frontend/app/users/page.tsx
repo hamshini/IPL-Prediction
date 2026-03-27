@@ -14,7 +14,7 @@ export default function UsersPage() {
 
     return (
         <div style={{ padding: "20px" }}>
-            <h1>Users</h1>
+            <h1 className="text-xl text-black font-bold">Users</h1>
 
             {users.map((user) => (
                 <div key={user.id}>

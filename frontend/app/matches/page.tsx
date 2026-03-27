@@ -15,7 +15,7 @@ export default function MatchesPage() {
     return (
         <div className="space-y-6">
 
-            <h1 className="text-xl font-bold">All Matches</h1>
+            <h1 className="text-xl text-black font-bold">All Matches</h1>
 
             {/* MOBILE VIEW */}
             <div className="space-y-4 md:hidden">
@@ -76,9 +76,9 @@ export default function MatchesPage() {
 
                 <table className="w-full text-left">
 
-                    <thead className="border-b">
+                    <thead className="border-b text-black">
 
-                        <tr className="text-sm text-gray-500">
+                        <tr className="text-sm text-gray-500 text-black">
 
                             <th className="p-3">Match</th>
                             <th className="p-3">Teams</th>
@@ -95,7 +95,7 @@ export default function MatchesPage() {
 
                         {matches.map((match) => (
 
-                            <tr key={match.id} className="border-b">
+                            <tr key={match.id} className="border-b text-black">
 
                                 <td className="p-3">{match.matchNo}</td>
 

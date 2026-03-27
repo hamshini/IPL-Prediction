@@ -16,7 +16,7 @@ export default function LeaderboardPage() {
 
             <table className="w-full text-left">
                 <thead>
-                    <tr className="text-gray-500 text-sm border-b">
+                    <tr className="text-gray-500 text-black text-sm border-b">
                         <th className="p-2">Name</th>
                         <th className="p-2">Points</th>
                         <th className="p-2">Win %</th>
@@ -26,7 +26,7 @@ export default function LeaderboardPage() {
 
                 <tbody>
                     {data.map((p) => (
-                        <tr key={p.name} className="border-b">
+                        <tr key={p.name} className="border-b text-black">
                             <td className="p-2">{p.name}</td>
                             <td className="p-2 font-bold">{p.totalPoints}</td>
                             <td className="p-2">{p.winPercent}%</td>

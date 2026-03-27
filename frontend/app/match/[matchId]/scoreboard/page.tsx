@@ -24,7 +24,7 @@ export default function MatchScoreboard() {
         <div className="p-6">
 
             {/* ✅ MATCH RESULT HEADER */}
-            <h1 className="text-xl font-bold mb-2">
+            <h1 className="text-xl text-black font-bold mb-2">
                 {match.winningTeamId} won
             </h1>
 
