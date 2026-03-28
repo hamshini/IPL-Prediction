@@ -58,12 +58,14 @@ export default function MatchesPage() {
                                 minute: "2-digit"
                             })}
                         </p>
-                        <button
-                            onClick={() => router.push(`/match/${match.id}/scoreboard`)}
-                            className="text-green-600 text-xs"
-                        >
-                            Picks & Score
-                        </button>
+                        {match.status === "COMPLETED" && (
+                            <button
+                                onClick={() => router.push(`/match/${match.id}/scoreboard`)}
+                                className="text-green-600 text-xs"
+                            >
+                                Picks & Score
+                            </button>
+                        )}
                     </div>
 
                 ))}
