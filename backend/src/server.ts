@@ -99,21 +99,41 @@ app.post("/matches", async (req, res) => {
 });
 
 app.get("/matches/upcoming", async (req, res) => {
+    try {
+        // ✅ Start of today (00:00)
+        const startOfToday = new Date()
+        startOfToday.setHours(0, 0, 0, 0)
 
-    const matches = await prisma.match.findMany({
-        where: {
-            date: {
-                gte: new Date(),
+        const matches = await prisma.match.findMany({
+            where: {
+                OR: [
+                    { status: "STARTED" }, // ✅ always include
+                    {
+                        date: {
+                            gte: startOfToday // ✅ today + future
+                        }
+                    }
+                ]
             },
-        },
-        orderBy: [
-            { date: "asc" },
-            { matchNo: "asc" } // ✅ stable ordering
-        ],
-        take: 3,
-    })
+            orderBy: [
+                { date: "asc" },
+                { matchNo: "asc" }
+            ],
+        })
 
-    res.json(matches)
+        // ✅ prioritize STARTED matches
+        const sorted = matches.sort((a, b) => {
+            if (a.status === "STARTED" && b.status !== "STARTED") return -1
+            if (a.status !== "STARTED" && b.status === "STARTED") return 1
+            return 0
+        })
+
+        res.json(sorted.slice(0, 3))
+
+    } catch (err) {
+        console.error(err)
+        res.status(500).json({ error: "Error fetching matches" })
+    }
 })
 
 app.get("/players", async (req, res) => {
