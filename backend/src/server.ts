@@ -825,7 +825,15 @@ app.get("/match/:matchId/scoreboard", async (req, res) => {
         const match = await prisma.match.findUnique({
             where: { id: matchId }
         })
-
+        if (!match) {
+            return res.status(404).json({ error: "Match not found" })
+        }
+        // ❌ If match not completed
+        if (match.status !== "COMPLETED") {
+            return res.status(400).json({
+                error: "Scoreboard not available. Match is not completed yet."
+            })
+        }
         const users = await prisma.user.findMany()
 
         const scores = await prisma.matchScore.findMany({
