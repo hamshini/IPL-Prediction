@@ -59,20 +59,6 @@ export default function Home() {
     teams.map(team => [team.id, team.shortName])
   );
   const isAdmin = user.role === "ADMIN"
-  const unlockTime = new Date("2026-03-28T19:30:00");
-
-  function isViewAllVisible() {
-    const stored = localStorage.getItem("viewAllUnlocked");
-
-    if (stored === "true") return true;
-
-    if (new Date() >= unlockTime) {
-      localStorage.setItem("viewAllUnlocked", "true");
-      return true;
-    }
-
-    return new Date() < unlockTime;;
-  }
 
   return (
 
@@ -141,12 +127,12 @@ export default function Home() {
             Top 4, Bottom 2, Orange and Purple cap
           </h2>
 
-          <button
+          {/* <button
             onClick={() => router.push("/seasonPick")}
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
           >
             Pick Now
-          </button>
+          </button> */}
 
         </div>
         <br></br>
@@ -179,18 +165,13 @@ export default function Home() {
               </p>
             </div>
           )}
-          {isViewAllVisible() ? (
-            <span className="text-gray-400 text-sm cursor-not-allowed" title="Will be available on 28th after 7:30 p.m.">
-              View All
-            </span>
-          ) : (
-            <a
-              href="/seasonPrediction"
-              className="text-blue-600 text-sm"
-            >
-              View All
-            </a>
-          )}
+
+          <a
+            href="/seasonPrediction"
+            className="text-blue-600 text-sm"
+          >
+            View All
+          </a>
         </div>
 
       </div>
