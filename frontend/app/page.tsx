@@ -355,7 +355,7 @@ export default function Home() {
             </h2>
 
             {/* Winning Team */}
-            <MySelect
+            <select
               onChange={(e: any) =>
                 setSelectedMatch((prev: any) => ({
                   ...prev,
@@ -371,10 +371,10 @@ export default function Home() {
               <option value={selectedMatch.teamBShortName}>
                 {selectedMatch.teamBShortName}
               </option>
-            </MySelect>
+            </select>
 
             {/* MoM */}
-            <MySelect
+            <select
               onChange={(e: any) =>
                 setSelectedMatch((prev: any) => ({
                   ...prev,
@@ -389,7 +389,7 @@ export default function Home() {
                   {p.name}
                 </option>
               ))}
-            </MySelect>
+            </select>
 
             {/* Buttons */}
             <div className="flex justify-end gap-2">
