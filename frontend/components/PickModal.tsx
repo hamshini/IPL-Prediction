@@ -34,6 +34,7 @@ export default function PickForm({ loggedUser }: { loggedUser: any }) {
     // Load players for relevant matches
     useEffect(() => {
         relevantMatches.forEach(async (match) => {
+
             if (playersByMatch[match.id]) return
 
             const players = await getPlayersByTeams([
@@ -52,29 +53,44 @@ export default function PickForm({ loggedUser }: { loggedUser: any }) {
     const relevantMatches = useMemo(() => {
         if (!matches.length) return []
 
+        const getLocalDateKey = (date: string | Date) => {
+            const d = new Date(date)
+            return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+        }
+
         const today = new Date()
-        today.setHours(0, 0, 0, 0)
+        const todayKey = getLocalDateKey(today)
 
         const sorted = [...matches].sort(
             (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
         )
 
         const grouped: Record<string, any[]> = {}
+
         sorted.forEach((match) => {
-            const key = new Date(match.date).toISOString().split("T")[0]
+            const key = getLocalDateKey(match.date)
             if (!grouped[key]) grouped[key] = []
             grouped[key].push(match)
         })
 
-        const todayKey = today.toISOString().split("T")[0]
+        // ✅ 1. If today matches exist → return ALL of them
+        if (grouped[todayKey]) {
+            return grouped[todayKey]
+        }
 
-        if (grouped[todayKey]) return grouped[todayKey]
-
+        // ✅ 2. Else → next upcoming date
         const futureDates = Object.keys(grouped)
-            .filter((date) => new Date(date) > today)
-            .sort()
+            .filter((date) => {
+                const d = new Date(date)
+                const t = new Date()
+                t.setHours(0, 0, 0, 0)
+                return d > t
+            })
+            .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
 
-        if (futureDates.length > 0) return grouped[futureDates[0]]
+        if (futureDates.length > 0) {
+            return grouped[futureDates[0]]
+        }
 
         return []
     }, [matches])
