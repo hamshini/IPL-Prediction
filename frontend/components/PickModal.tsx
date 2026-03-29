@@ -55,11 +55,13 @@ export default function PickForm({ loggedUser }: { loggedUser: any }) {
 
         const getLocalDateKey = (date: string | Date) => {
             const d = new Date(date)
-            return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+            const year = d.getFullYear()
+            const month = String(d.getMonth() + 1).padStart(2, "0")
+            const day = String(d.getDate()).padStart(2, "0")
+            return `${year}-${month}-${day}`
         }
 
-        const today = new Date()
-        const todayKey = getLocalDateKey(today)
+        const todayKey = getLocalDateKey(new Date())
 
         const sorted = [...matches].sort(
             (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
@@ -73,20 +75,15 @@ export default function PickForm({ loggedUser }: { loggedUser: any }) {
             grouped[key].push(match)
         })
 
-        // ✅ 1. If today matches exist → return ALL of them
+        // ✅ 1. TODAY matches (ALL of them)
         if (grouped[todayKey]) {
             return grouped[todayKey]
         }
 
-        // ✅ 2. Else → next upcoming date
+        // ✅ 2. NEXT upcoming date
         const futureDates = Object.keys(grouped)
-            .filter((date) => {
-                const d = new Date(date)
-                const t = new Date()
-                t.setHours(0, 0, 0, 0)
-                return d > t
-            })
-            .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+            .filter((date) => date > todayKey) // ✅ FIXED
+            .sort()
 
         if (futureDates.length > 0) {
             return grouped[futureDates[0]]
@@ -94,7 +91,6 @@ export default function PickForm({ loggedUser }: { loggedUser: any }) {
 
         return []
     }, [matches])
-
     // Handle form changes
     const handleChange = (key: string, value: string) => {
         setFormData((prev: any) => ({
