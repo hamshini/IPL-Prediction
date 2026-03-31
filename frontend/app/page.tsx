@@ -328,12 +328,12 @@ export default function Home() {
 
 
                   {/* ✅ PLAYER VIEW PICKS (optional) */}
-                  {!isAdmin && canViewPicks && (
+                  {canViewPicks && (
                     <button
                       onClick={() => router.push(`/match/${match.id}/picks`)}
                       className="text-blue-600 text-xs mt-2"
                     >
-                      View Picks
+                      View Approved Picks
                     </button>
                   )}
 
