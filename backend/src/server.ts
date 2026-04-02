@@ -20,6 +20,15 @@ app.use(cors({
     credentials: true,
 }));
 
+function getUserFromToken(req: any) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) throw new Error("Unauthorized");
+
+    const token = authHeader.split(" ")[1];
+    if (!token) throw new Error("Unauthorized");
+
+    return jwt.verify(token, process.env.JWT_SECRET!);
+}
 app.get("/users", async (req, res) => {
     const users = await prisma.user.findMany();
     res.json(users);
@@ -586,8 +595,9 @@ app.post("/admin/match/cancel", async (req, res) => {
 
 app.post("/admin/pick/approve", async (req, res) => {
     try {
-        const { historyId, adminId } = req.body
-
+        const { historyId } = req.body
+        const user: any = getUserFromToken(req);
+        const adminId = user.id;
         const history = await prisma.pickHistory.findUnique({
             where: { id: historyId },
         })
@@ -854,6 +864,7 @@ app.get("/match/:matchId/scoreboard", async (req, res) => {
                 error: "Scoreboard not available. Match is not completed yet."
             })
         }
+
         const users = await prisma.user.findMany()
 
         const scores = await prisma.matchScore.findMany({
@@ -863,6 +874,16 @@ app.get("/match/:matchId/scoreboard", async (req, res) => {
         const picks = await prisma.playerPick.findMany({
             where: { matchId }
         })
+        const allMatches = await prisma.match.findMany({
+            where: { status: "COMPLETED" },
+            orderBy: { matchNo: "asc" } // or date
+        })
+
+        const currentIndex = allMatches.findIndex(m => m.id === matchId)
+
+        const previousMatchIds = allMatches
+            .slice(0, currentIndex)
+            .map(m => m.id)
 
         const result = await Promise.all(users.map(async (user) => {
 
@@ -873,7 +894,7 @@ app.get("/match/:matchId/scoreboard", async (req, res) => {
             const previousScores = await prisma.matchScore.findMany({
                 where: {
                     userId: user.id,
-                    createdAt: { lt: score?.createdAt || new Date() }
+                    matchId: { in: previousMatchIds }
                 }
             })
 
@@ -924,6 +945,48 @@ app.get("/match/:matchId/scoreboard", async (req, res) => {
     } catch (err) {
         console.error(err)
         res.status(500).json({ error: "Error fetching scoreboard" })
+    }
+})
+
+app.post("/fix-missing-scores", async (req, res) => {
+    try {
+        const matches = await prisma.match.findMany({
+            where: { status: "COMPLETED" }
+        })
+
+        const users = await prisma.user.findMany()
+
+        for (const match of matches) {
+
+            for (const user of users) {
+
+                const existing = await prisma.matchScore.findFirst({
+                    where: {
+                        matchId: match.id,
+                        userId: user.id
+                    }
+                })
+
+                if (!existing) {
+                    await prisma.matchScore.create({
+                        data: {
+                            matchId: match.id,
+                            userId: user.id,
+                            result: "LOSS",
+                            streak: 0,
+                            points: -10,
+                            isMomCorrect: false
+                        }
+                    })
+                }
+            }
+        }
+
+        res.json({ message: "Fixed missing scores" })
+
+    } catch (err) {
+        console.error(err)
+        res.status(500).json({ error: "Fix failed" })
     }
 })
 
