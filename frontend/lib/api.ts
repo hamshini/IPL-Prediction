@@ -124,15 +124,15 @@ export async function signup(data: any) {
     return res.json();
 }
 
-// export async function login(data: any) {
-//     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/login`, {
-//         method: "POST",
-//         headers: { "Content-Type": "application/json" },
-//         body: JSON.stringify(data)
-//     });
+export async function login(data: any) {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+    });
 
-//     return res.json();
-// }
+    return res.json();
+}
 
 // export async function signup(data: any) {
 //     const { email, name, password } = data;
@@ -148,38 +148,38 @@ export async function signup(data: any) {
 //     return { success: true };
 // }
 
-export async function login(data: any) {
-    const { login, password } = data;
+// export async function login(data: any) {
+//     const { login, password } = data;
 
-    // same as: OR email OR name
-    const { data: users, error } = await supabase
-        .from("User")
-        .select("*")
-        .or(`email.eq.${login},name.eq.${login}`);
+//     // same as: OR email OR name
+//     const { data: users, error } = await supabase
+//         .from("User")
+//         .select("*")
+//         .or(`email.eq.${login},name.eq.${login}`);
 
-    if (error || !users || users.length === 0) {
-        return { error: "User not found" };
-    }
+//     if (error || !users || users.length === 0) {
+//         return { error: "User not found" };
+//     }
 
-    const user = users[0];
+//     const user = users[0];
 
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) {
-        return { error: "Invalid password" };
-    }
+//     const validPassword = await bcrypt.compare(password, user.password);
+//     if (!validPassword) {
+//         return { error: "Invalid password" };
+//     }
 
-    // replace JWT with local session
-    localStorage.setItem("user", JSON.stringify(user));
+//     // replace JWT with local session
+//     localStorage.setItem("user", JSON.stringify(user));
 
-    return {
-        user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user.role
-        }
-    };
-}
+//     return {
+//         user: {
+//             id: user.id,
+//             email: user.email,
+//             name: user.name,
+//             role: user.role
+//         }
+//     };
+// }
 
 export const submitPicks = async (formData: any) => {
     // 1️⃣ Get logged-in user from localStorage
