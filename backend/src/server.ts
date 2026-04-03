@@ -948,48 +948,6 @@ app.get("/match/:matchId/scoreboard", async (req, res) => {
     }
 })
 
-app.post("/fix-missing-scores", async (req, res) => {
-    try {
-        const matches = await prisma.match.findMany({
-            where: { status: "COMPLETED" }
-        })
-
-        const users = await prisma.user.findMany()
-
-        for (const match of matches) {
-
-            for (const user of users) {
-
-                const existing = await prisma.matchScore.findFirst({
-                    where: {
-                        matchId: match.id,
-                        userId: user.id
-                    }
-                })
-
-                if (!existing) {
-                    await prisma.matchScore.create({
-                        data: {
-                            matchId: match.id,
-                            userId: user.id,
-                            result: "LOSS",
-                            streak: 0,
-                            points: -10,
-                            isMomCorrect: false
-                        }
-                    })
-                }
-            }
-        }
-
-        res.json({ message: "Fixed missing scores" })
-
-    } catch (err) {
-        console.error(err)
-        res.status(500).json({ error: "Fix failed" })
-    }
-})
-
 app.listen(PORT, () => {
     console.log(`Backend running on port ${PORT}`);
 });
