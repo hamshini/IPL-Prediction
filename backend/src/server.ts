@@ -597,7 +597,7 @@ app.post("/admin/pick/approve", async (req, res) => {
     try {
         const { historyId } = req.body
         const user: any = getUserFromToken(req);
-        const adminId = user.id;
+        const adminId = user.userId;
         const history = await prisma.pickHistory.findUnique({
             where: { id: historyId },
         })

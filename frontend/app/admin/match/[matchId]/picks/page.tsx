@@ -15,14 +15,19 @@ export default function AdminPicksPage() {
     }, [matchId])
 
     const approve = async (pickId: string) => {
+        const token = localStorage.getItem("token");
+
         await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/pick/approve`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ historyId: pickId, adminId: "ADMIN_ID" }),
-        })
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`, // ✅ REQUIRED
+            },
+            body: JSON.stringify({ historyId: pickId }),
+        });
 
-        location.reload()
-    }
+        location.reload();
+    };
 
     const reject = async (pickId: string) => {
         await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/pick/reject`, {
