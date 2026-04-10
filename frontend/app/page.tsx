@@ -319,7 +319,7 @@ export default function Home() {
                     )}
 
                     {/* VIEW PICKS */}
-                    {match.status === "STARTED" || match.actualStart && isAdmin && (
+                    {match.status === "STARTED" && isAdmin && (
                       <button
                         onClick={() => router.push(`/admin/match/${match.id}/picks`)}
                         className="bg-blue-600 text-white px-2 py-1 rounded text-xs"
