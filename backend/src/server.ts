@@ -20,6 +20,15 @@ app.use(cors({
     credentials: true,
 }));
 
+type MatchScore = {
+    userId: string;
+    matchId: string;
+    result: string;
+    streak: number;
+    points: number;
+    isMomCorrect: boolean;
+    createdAt: Date;
+};
 function getUserFromToken(req: any) {
     const authHeader = req.headers.authorization;
     if (!authHeader) throw new Error("Unauthorized");
@@ -478,6 +487,104 @@ app.get("/admin/match/:matchId/picks", async (req, res) => {
     }
 })
 
+// app.post("/match/complete", async (req, res) => {
+//     try {
+//         const { matchId, winningTeamId, manOfMatch } = req.body;
+
+//         if (!matchId || !winningTeamId || !manOfMatch) {
+//             return res.status(400).json({ error: "All fields required" });
+//         }
+//         const match = await prisma.match.findUnique({
+//             where: { id: matchId }
+//         });
+
+//         if (match?.status !== "STARTED") {
+//             return res.status(400).json({ error: "Match not started" });
+//         }
+//         // ✅ prevent duplicate scoring
+//         const existing = await prisma.matchScore.findFirst({
+//             where: { matchId }
+//         });
+
+//         // if (existing) {
+//         //     return res.status(400).json({ error: "Already scored" });
+//         // }
+
+//         // 1️⃣ Update match
+//         await prisma.match.update({
+//             where: { id: matchId },
+//             data: {
+//                 status: "COMPLETED",
+//                 winningTeamId,
+//                 manOfMatch
+//             }
+//         });
+
+//         // 2️⃣ Get approved picks
+//         const picks = await prisma.playerPick.findMany({
+//             where: {
+//                 matchId,
+//                 status: "APPROVED"
+//             }
+//         });
+
+//         // 3️⃣ Loop
+//         for (const pick of picks) {
+
+//             const isWin = pick.teamPickedId === winningTeamId;
+
+//             const isMom =
+//                 pick.mom1Picked === manOfMatch ||
+//                 pick.mom2Picked === manOfMatch;
+
+//             // 🔁 streak
+//             const last = await prisma.matchScore.findFirst({
+//                 where: { userId: pick.userId },
+//                 orderBy: { createdAt: "desc" }
+//             });
+
+//             let streak = 0;
+//             if (last?.result === "WIN") {
+//                 streak = last.streak;
+//             }
+
+//             let points = 0;
+
+//             if (isWin) {
+//                 streak += 1;
+
+//                 points = Math.min(streak * 10, 30); // 10 for 1st win, 20 for 2nd, max 30
+
+//             } else {
+//                 points = -10;
+//                 streak = 0;
+//             }
+
+//             // ✅ MoM rule (either matches)
+//             if (isMom) {
+//                 points += 5;
+//             }
+
+//             await prisma.matchScore.create({
+//                 data: {
+//                     userId: pick.userId,
+//                     matchId,
+//                     result: isWin ? "WIN" : "LOSS",
+//                     streak,
+//                     points,
+//                     isMomCorrect: isMom
+//                 }
+//             });
+//         }
+
+//         res.json({ message: "Match completed + scoring done" });
+
+//     } catch (err) {
+//         console.error(err);
+//         res.status(500).json({ error: "Error completing match" });
+//     }
+// });
+
 app.post("/match/complete", async (req, res) => {
     try {
         const { matchId, winningTeamId, manOfMatch } = req.body;
@@ -485,94 +592,145 @@ app.post("/match/complete", async (req, res) => {
         if (!matchId || !winningTeamId || !manOfMatch) {
             return res.status(400).json({ error: "All fields required" });
         }
-        const match = await prisma.match.findUnique({
-            where: { id: matchId }
-        });
 
-        if (match?.status !== "STARTED") {
-            return res.status(400).json({ error: "Match not started" });
-        }
-        // ✅ prevent duplicate scoring
-        const existing = await prisma.matchScore.findFirst({
-            where: { matchId }
-        });
+        // 🔒 Transaction for consistency
+        const result = await prisma.$transaction(async (tx) => {
 
-        // if (existing) {
-        //     return res.status(400).json({ error: "Already scored" });
-        // }
+            const match = await tx.match.findUnique({
+                where: { id: matchId }
+            });
 
-        // 1️⃣ Update match
-        await prisma.match.update({
-            where: { id: matchId },
-            data: {
-                status: "COMPLETED",
-                winningTeamId,
-                manOfMatch
+            if (!match) {
+                throw new Error("Match not found");
             }
-        });
 
-        // 2️⃣ Get approved picks
-        const picks = await prisma.playerPick.findMany({
-            where: {
-                matchId,
-                status: "APPROVED"
+            if (match.status !== "STARTED") {
+                throw new Error("Match not started or already completed");
             }
-        });
 
-        // 3️⃣ Loop
-        for (const pick of picks) {
+            // ❌ Prevent duplicate scoring
+            const existing = await tx.matchScore.findFirst({
+                where: { matchId }
+            });
 
-            const isWin = pick.teamPickedId === winningTeamId;
+            if (existing) {
+                throw new Error("Match already scored");
+            }
 
-            const isMom =
-                pick.mom1Picked === manOfMatch ||
-                pick.mom2Picked === manOfMatch;
+            // ✅ Update match
+            await tx.match.update({
+                where: { id: matchId },
+                data: {
+                    status: "COMPLETED",
+                    winningTeamId,
+                    manOfMatch
+                }
+            });
 
-            // 🔁 streak
-            const last = await prisma.matchScore.findFirst({
-                where: { userId: pick.userId },
+            // ✅ Get all users
+            const users = await tx.user.findMany();
+
+            // ✅ Get all picks (for this match)
+            const picks = await tx.playerPick.findMany({
+                where: { matchId }
+            });
+
+            // ✅ Get last scores for streak calculation
+            const lastScores = await tx.matchScore.findMany({
+                where: {
+                    userId: { in: users.map(u => u.id) }
+                },
                 orderBy: { createdAt: "desc" }
             });
 
-            let streak = 0;
-            if (last?.result === "WIN") {
-                streak = last.streak;
+            // map → latest score per user
+            const lastScoreMap: Record<string, MatchScore> = {};
+            for (const s of lastScores) {
+                if (!lastScoreMap[s.userId]) {
+                    lastScoreMap[s.userId] = s;
+                }
             }
 
-            let points = 0;
+            const scoreData = [];
 
-            if (isWin) {
-                streak += 1;
+            // 🔁 Process ALL users
+            for (const user of users) {
 
-                points = Math.min(streak * 10, 30); // 10 for 1st win, 20 for 2nd, max 30
+                const pick = picks.find(
+                    p => p.userId === user.id && p.status === "APPROVED"
+                );
 
-            } else {
-                points = -10;
-                streak = 0;
-            }
+                const last = lastScoreMap[user.id];
 
-            // ✅ MoM rule (either matches)
-            if (isMom) {
-                points += 5;
-            }
+                let streak = 0;
+                if (last?.result === "WIN") {
+                    streak = last.streak;
+                }
 
-            await prisma.matchScore.create({
-                data: {
-                    userId: pick.userId,
+                // ❌ NO PICK
+                if (!pick) {
+                    scoreData.push({
+                        userId: user.id,
+                        matchId,
+                        result: "LOSS",
+                        streak: 0,
+                        points: -10,
+                        isMomCorrect: false
+                    });
+                    continue;
+                }
+
+                // ✅ NORMAL CASE
+                const isWin = pick.teamPickedId === winningTeamId;
+
+                const isMom =
+                    pick.mom1Picked === manOfMatch ||
+                    pick.mom2Picked === manOfMatch;
+
+                let points = 0;
+
+                if (isWin) {
+                    streak += 1;
+                    points = Math.min(streak * 10, 30);
+                } else {
+                    points = -10;
+                    streak = 0;
+                }
+
+                if (isMom) {
+                    points += 5;
+                }
+
+                scoreData.push({
+                    userId: user.id,
                     matchId,
                     result: isWin ? "WIN" : "LOSS",
                     streak,
                     points,
                     isMomCorrect: isMom
-                }
-            });
-        }
+                });
+            }
 
-        res.json({ message: "Match completed + scoring done" });
+            // ✅ Bulk insert (fast)
+            await tx.matchScore.createMany({
+                data: scoreData
+            });
+
+            return { message: "Match completed + scoring done" };
+        });
+
+        res.json(result);
 
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: "Error completing match" });
+
+        if (err instanceof Error) {
+            return res.status(400).json({ error: err.message });
+        }
+
+        return res.status(500).json({
+            error: "Unknown error occurred"
+        });
     }
 });
 
