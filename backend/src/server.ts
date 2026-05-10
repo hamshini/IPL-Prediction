@@ -925,9 +925,10 @@ app.get("/leaderboard", async (req, res) => {
             select: { id: true, name: true },
         });
 
+        // latest first
         const matches = await prisma.match.findMany({
             where: { status: "COMPLETED" },
-            orderBy: { date: "asc" }
+            orderBy: { date: "desc" }
         });
 
         const allScores = await prisma.matchScore.findMany();
@@ -941,7 +942,15 @@ app.get("/leaderboard", async (req, res) => {
             let lastResult = "-";
             let lastPoints = 0;
 
-            matches.forEach((match) => {
+            // ✅ NEW ARRAY
+            const matchHistory: {
+                match: string;
+                matchId: string;
+                points: number;
+                result: string;
+            }[] = [];
+
+            matches.forEach((match, index) => {
 
                 const score = allScores.find(
                     s => s.userId === user.id && s.matchId === match.id
@@ -954,7 +963,6 @@ app.get("/leaderboard", async (req, res) => {
                 let matchPoints = 0;
                 let result = "LOSS";
 
-                // ✅ IMPORTANT FIX
                 if (!pick || pick.status !== "APPROVED") {
                     matchPoints = -10;
                     result = "LOSS";
@@ -970,7 +978,6 @@ app.get("/leaderboard", async (req, res) => {
                         streak = 0;
                     }
                 } else {
-                    // fallback safety
                     matchPoints = -10;
                     result = "LOSS";
                     streak = 0;
@@ -978,14 +985,27 @@ app.get("/leaderboard", async (req, res) => {
 
                 totalPoints += matchPoints;
 
-                // track last match
-                lastResult = result;
-                lastPoints = matchPoints;
+                // latest match tracking
+                if (index === 0) {
+                    lastResult = result;
+                    lastPoints = matchPoints;
+                }
+
+                // ✅ ADD MATCH DATA
+                matchHistory.push({
+                    match: `M${matches.length - index}`,
+                    matchId: match.id,
+                    points: matchPoints,
+                    result,
+                });
             });
 
             const totalMatches = matches.length;
+
             const winPercent =
-                totalMatches === 0 ? 0 : Math.round((wins / totalMatches) * 100);
+                totalMatches === 0
+                    ? 0
+                    : Math.round((wins / totalMatches) * 100);
 
             return {
                 name: user.name,
@@ -993,6 +1013,9 @@ app.get("/leaderboard", async (req, res) => {
                 winPercent,
                 latestResult: `${lastResult} (${lastPoints})`,
                 streak,
+
+                // ✅ NEW FIELD
+                matches: matchHistory,
             };
         });
 
@@ -1005,6 +1028,92 @@ app.get("/leaderboard", async (req, res) => {
         res.status(500).json({ error: "Leaderboard error" });
     }
 });
+// app.get("/leaderboard", async (req, res) => {
+//     try {
+//         const users = await prisma.user.findMany({
+//             select: { id: true, name: true },
+//         });
+
+//         const matches = await prisma.match.findMany({
+//             where: { status: "COMPLETED" },
+//             orderBy: { date: "asc" }
+//         });
+
+//         const allScores = await prisma.matchScore.findMany();
+//         const allPicks = await prisma.playerPick.findMany();
+
+//         const leaderboard = users.map((user) => {
+
+//             let totalPoints = 0;
+//             let wins = 0;
+//             let streak = 0;
+//             let lastResult = "-";
+//             let lastPoints = 0;
+
+//             matches.forEach((match) => {
+
+//                 const score = allScores.find(
+//                     s => s.userId === user.id && s.matchId === match.id
+//                 );
+
+//                 const pick = allPicks.find(
+//                     p => p.userId === user.id && p.matchId === match.id
+//                 );
+
+//                 let matchPoints = 0;
+//                 let result = "LOSS";
+
+//                 // ✅ IMPORTANT FIX
+//                 if (!pick || pick.status !== "APPROVED") {
+//                     matchPoints = -10;
+//                     result = "LOSS";
+//                     streak = 0;
+//                 } else if (score) {
+//                     matchPoints = score.points;
+//                     result = score.result;
+
+//                     if (result === "WIN") {
+//                         wins++;
+//                         streak++;
+//                     } else {
+//                         streak = 0;
+//                     }
+//                 } else {
+//                     // fallback safety
+//                     matchPoints = -10;
+//                     result = "LOSS";
+//                     streak = 0;
+//                 }
+
+//                 totalPoints += matchPoints;
+
+//                 // track last match
+//                 lastResult = result;
+//                 lastPoints = matchPoints;
+//             });
+
+//             const totalMatches = matches.length;
+//             const winPercent =
+//                 totalMatches === 0 ? 0 : Math.round((wins / totalMatches) * 100);
+
+//             return {
+//                 name: user.name,
+//                 totalPoints,
+//                 winPercent,
+//                 latestResult: `${lastResult} (${lastPoints})`,
+//                 streak,
+//             };
+//         });
+
+//         leaderboard.sort((a, b) => b.totalPoints - a.totalPoints);
+
+//         res.json(leaderboard);
+
+//     } catch (err) {
+//         console.error(err);
+//         res.status(500).json({ error: "Leaderboard error" });
+//     }
+// });
 
 app.get("/match/:matchId/scoreboard", async (req, res) => {
     try {
