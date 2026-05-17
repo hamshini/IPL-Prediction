@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,9 +7,160 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/////////////////////
-//ENUMS
-/////////////////////
+model User {
+  id                     String            @id @default(uuid())
+  email                  String            @unique
+  name                   String            @unique
+  role                   Role              @default(PLAYER)
+  createdAt              DateTime          @default(now())
+  password               String
+  matchScores            MatchScore[]
+  pickHistoriesSubmitted PickHistory[]     @relation("SubmittedHistory")
+  PickHistory            PickHistory[]
+  picksSubmitted         PlayerPick[]      @relation("SubmittedByRelation")
+  picks                  PlayerPick[]      @relation("UserPicks")
+  seasonPrediction       SeasonPrediction?
+}
+
+model Team {
+  name           String
+  captain        String
+  shortName      String   @unique
+  id             Int      @id @default(autoincrement())
+  matchesAsTeamA Match[]  @relation("TeamA")
+  matchesAsTeamB Match[]  @relation("TeamB")
+  players        Player[]
+}
+
+/// ///////////////////
+/// //////////////////
+model Player {
+  name          String
+  id            Int    @id @default(autoincrement())
+  teamShortName String
+  team          Team   @relation(fields: [teamShortName], references: [shortName])
+}
+
+model Match {
+  id             String        @id @default(uuid())
+  matchNo        Int
+  date           DateTime
+  venue          String
+  scheduledStart DateTime
+  actualStart    DateTime?
+  manOfMatch1    String?
+  manOfMatch2    String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @default(dbgenerated("(now() AT TIME ZONE 'utc'::text)")) @updatedAt
+  status         MatchStatus   @default(SCHEDULED)
+  teamAShortName String
+  teamBShortName String
+  manOfMatch     String?
+  winningTeamId  String?
+  teamA          Team          @relation("TeamA", fields: [teamAShortName], references: [shortName])
+  teamB          Team          @relation("TeamB", fields: [teamBShortName], references: [shortName])
+  scores         MatchScore[]
+  PickHistory    PickHistory[]
+  picks          PlayerPick[]
+}
+
+model PlayerPick {
+  id             String        @id @default(uuid())
+  userId         String
+  matchId        String
+  teamPickedId   String
+  mom1Picked     String?
+  mom2Picked     String?
+  lastModifiedAt DateTime?
+  approvalTime   DateTime?
+  approvedBy     String?
+  createdAt      DateTime      @default(now())
+  submittedBy    String
+  status         PickStatus    @default(PENDING)
+  submittedAt    DateTime?     @db.Timestamp(6)
+  history        PickHistory[]
+  match          Match         @relation(fields: [matchId], references: [id])
+  submittedUser  User          @relation("SubmittedByRelation", fields: [submittedBy], references: [id])
+  user           User          @relation("UserPicks", fields: [userId], references: [id])
+
+  @@unique([userId, matchId])
+}
+
+model PickHistory {
+  id            String      @id @default(dbgenerated("gen_random_uuid()"))
+  teamPickedId  String
+  playerPickId  String?
+  mom1Picked    String?
+  mom2Picked    String?
+  modifiedAt    DateTime    @default(now())
+  matchId       String
+  status        PickStatus  @default(PENDING)
+  submittedBy   String
+  userId        String
+  match         Match       @relation(fields: [matchId], references: [id])
+  pick          PlayerPick? @relation(fields: [playerPickId], references: [id])
+  submittedUser User        @relation("SubmittedHistory", fields: [submittedBy], references: [id])
+  user          User        @relation(fields: [userId], references: [id])
+}
+
+/// ////////////////////
+/// ////////////////////
+model SeasonPrediction {
+  id             String                    @id @default(uuid())
+  userId         String                    @unique
+  submittedBy    String
+  top1TeamId     String
+  top2TeamId     String
+  top3TeamId     String
+  top4TeamId     String
+  bottom1TeamId  String
+  bottom2TeamId  String
+  orangeCap1     String
+  orangeCap2     String
+  orangeCap3     String
+  purpleCap1     String
+  purpleCap2     String
+  purpleCap3     String
+  submittedAt    DateTime                  @default(now())
+  lastModifiedAt DateTime?
+  user           User                      @relation(fields: [userId], references: [id])
+  history        SeasonPredictionHistory[]
+}
+
+model SeasonPredictionHistory {
+  id                 String           @id @default(uuid())
+  seasonPredictionId String
+  top1TeamId         String
+  top2TeamId         String
+  top3TeamId         String
+  top4TeamId         String
+  bottom1TeamId      String
+  bottom2TeamId      String
+  orangeCap1         String
+  orangeCap2         String
+  orangeCap3         String
+  purpleCap1         String
+  purpleCap2         String
+  purpleCap3         String
+  modifiedBy         String
+  modifiedAt         DateTime         @default(now())
+  prediction         SeasonPrediction @relation(fields: [seasonPredictionId], references: [id])
+}
+
+model MatchScore {
+  id           String   @id @default(uuid())
+  userId       String
+  matchId      String
+  result       String
+  streak       Int
+  points       Int
+  isMomCorrect Boolean
+  createdAt    DateTime @default(now())
+  match        Match    @relation(fields: [matchId], references: [id])
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, matchId])
+}
 
 enum Role {
   ADMIN
@@ -35,231 +180,4 @@ enum PickStatus {
   MODIFIED_PENDING
   APPROVED
   REJECTED
-}
-
-/////////////////////
-// User
-/////////////////////
-
-model User {
-  id       String @id @default(uuid())
-  email    String @unique
-  name     String @unique
-  password String
-  role     Role   @default(PLAYER)
-
-  // Picks created by user
-  picks PlayerPick[] @relation("UserPicks")
-
-  // Picks submitted on behalf of others
-  picksSubmitted PlayerPick[] @relation("SubmittedByRelation")
-
-  // Pick histories submitted by user
-  pickHistoriesSubmitted PickHistory[] @relation("SubmittedHistory")
-
-  seasonPrediction SeasonPrediction?
-  createdAt        DateTime          @default(now())
-  PickHistory      PickHistory[]
-   matchScores MatchScore[] 
-}
-
-//////////////////////
-// TEAM
-/////////////////////
-
-model Team {
-  id             Int      @id @default(autoincrement())
-  name           String
-  shortName      String   @unique
-  captain        String
-  players        Player[]
-  matchesAsTeamA Match[]  @relation("TeamA")
-  matchesAsTeamB Match[]  @relation("TeamB")
-}
-
-//////////////////////
-// Player
-/////////////////////
-model Player {
-  id            Int    @id @default(autoincrement())
-  name          String
-  teamShortName String
-  team          Team   @relation(fields: [teamShortName], references: [shortName])
-}
-
-/////////////////////////
-// Match
-///////////////////////
-
-model Match {
-  id      String @id @default(uuid())
-  matchNo Int
-
-  teamAShortName String
-  teamBShortName String
-
-  teamA Team @relation("TeamA", fields: [teamAShortName], references: [shortName])
-  teamB Team @relation("TeamB", fields: [teamBShortName], references: [shortName])
-
-  date           DateTime
-  venue          String
-  scheduledStart DateTime
-  actualStart    DateTime?
-  status         MatchStatus @default(SCHEDULED)
-
-  manOfMatch1 String?
-  manOfMatch2 String?
-winningTeamId String?
-manOfMatch    String?
-  picks PlayerPick[]
-
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  PickHistory PickHistory[]
-  scores MatchScore[]
-}
-
-////////////////////////
-// PLAYER PICK
-///////////////////////
-
-model PlayerPick {
-  id          String @id @default(uuid())
-  userId      String
-  submittedBy String
-  matchId     String
-
-  teamPickedId String
-  mom1Picked   String?
-  mom2Picked   String?
-
-  status       PickStatus @default(PENDING)
-  approvalTime DateTime?
-  approvedBy   String?
-
-  user          User  @relation("UserPicks", fields: [userId], references: [id])
-  submittedUser User  @relation("SubmittedByRelation", fields: [submittedBy], references: [id])
-  match         Match @relation(fields: [matchId], references: [id])
-
-  history PickHistory[]
-
-  createdAt      DateTime  @default(now())
-  lastModifiedAt DateTime?
-
-  @@unique([userId, matchId])
-}
-
-///////////////////////
-// PickHistory
-///////////////////////
-
-model PickHistory {
-  id           String  @id @default(uuid())
-  playerPickId String?
-  userId       String
-  submittedBy  String
-  matchId      String
-
-  teamPickedId String
-  mom1Picked   String?
-  mom2Picked   String?
-
-  status     PickStatus @default(PENDING)
-  modifiedAt DateTime   @default(now())
-
-  pick          PlayerPick? @relation(fields: [playerPickId], references: [id])
-  user          User        @relation(fields: [userId], references: [id])
-  submittedUser User        @relation("SubmittedHistory", fields: [submittedBy], references: [id])
-  match         Match       @relation(fields: [matchId], references: [id])
-}
-
-///////////////////////
-// SeasonPrediction
-///////////////////////
-model SeasonPrediction {
-  id String @id @default(uuid())
-
-  userId      String // whose prediction
-  submittedBy String // who submitted
-
-  // Teams
-  top1TeamId String
-  top2TeamId String
-  top3TeamId String
-  top4TeamId String
-
-  bottom1TeamId String
-  bottom2TeamId String
-
-  // Orange Cap (Top 3 batsmen)
-  orangeCap1 String
-  orangeCap2 String
-  orangeCap3 String
-
-  // Purple Cap (Top 3 bowlers)
-  purpleCap1 String
-  purpleCap2 String
-  purpleCap3 String
-
-  submittedAt    DateTime  @default(now())
-  lastModifiedAt DateTime?
-
-  user User @relation(fields: [userId], references: [id])
-
-  history SeasonPredictionHistory[]
-
-  @@unique([userId]) // one prediction per user
-}
-
-///////////////////////
-// SeasonPredictionHistory
-///////////////////////
-
-model SeasonPredictionHistory {
-  id String @id @default(uuid())
-
-  seasonPredictionId String
-
-  // Teams snapshot
-  top1TeamId String
-  top2TeamId String
-  top3TeamId String
-  top4TeamId String
-
-  bottom1TeamId String
-  bottom2TeamId String
-
-  // Orange cap snapshot
-  orangeCap1 String
-  orangeCap2 String
-  orangeCap3 String
-
-  // Purple cap snapshot
-  purpleCap1 String
-  purpleCap2 String
-  purpleCap3 String
-
-  modifiedBy String
-  modifiedAt DateTime @default(now())
-
-  prediction SeasonPrediction @relation(fields: [seasonPredictionId], references: [id])
-}
-
-model MatchScore {
-  id        String   @id @default(uuid())
-  userId    String
-  matchId   String
-
-  result    String   // "WIN" | "LOSS"
-  streak    Int
-  points    Int
-
-  isMomCorrect Boolean
-
-  createdAt DateTime @default(now())
-
-  user  User  @relation(fields: [userId], references: [id])
-  match Match @relation(fields: [matchId], references: [id])
-
-  @@unique([userId, matchId]) // prevent duplicate scoring
 }

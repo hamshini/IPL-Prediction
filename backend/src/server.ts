@@ -800,6 +800,7 @@ app.post("/admin/pick/approve", async (req, res) => {
                     teamPickedId: history.teamPickedId,
                     mom1Picked: history.mom1Picked,
                     mom2Picked: history.mom2Picked,
+                    submittedAt: history.modifiedAt,
                 },
             })
         } else {
@@ -815,6 +816,7 @@ app.post("/admin/pick/approve", async (req, res) => {
                     status: "APPROVED",
                     approvalTime: new Date(),
                     approvedBy: adminId,
+                    submittedAt: history.modifiedAt,
                 },
             })
         }
