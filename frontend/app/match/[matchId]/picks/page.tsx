@@ -48,7 +48,7 @@ export default function MatchPicksPage() {
                                     <th className="border p-2">Team</th>
                                     <th className="border p-2">MOM1</th>
                                     <th className="border p-2">MOM2</th>
-                                    <th className="border p-2">Time</th>
+                                    <th className="border p-2">submitted At</th>
                                     <th className="border p-2">Status</th>
                                 </tr>
                             </thead>
@@ -60,11 +60,18 @@ export default function MatchPicksPage() {
                                         <td className="border p-2">{h.teamPickedId}</td>
                                         <td className="border p-2">{h.mom1Picked}</td>
                                         <td className="border p-2">{h.mom2Picked}</td>
-
                                         <td className="border p-2">
-                                            {new Date(h.createdAt).toLocaleString()}
+                                            {h.submittedAt
+                                                ? new Date(h.submittedAt).toLocaleString("en-IN", {
+                                                    day: "2-digit",
+                                                    month: "short",
+                                                    year: "numeric",
+                                                    hour: "2-digit",
+                                                    minute: "2-digit",
+                                                    hour12: true,
+                                                })
+                                                : "-"}
                                         </td>
-
                                         <td className="border p-2">
                                             {h.status}
                                         </td>
